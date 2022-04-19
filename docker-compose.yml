@@ -1,0 +1,64 @@
+version: "3.5"
+services:
+  # Orion is the context broker
+  orion:
+    image: fiware/orion:${ORION_VERSION}
+    hostname: orion
+    container_name: fiware-orion
+    depends_on:
+      - mongo-db
+    networks:
+      - main-net
+    expose:
+      - "${ORION_PORT}"
+    ports:
+      - "7000:${ORION_PORT}" # localhost:1026
+    command: -dbhost mongo-db -logLevel ${LOG_LEVEL}
+    healthcheck:
+      test: curl --fail -s http://orion:${ORION_PORT}/version || exit 1
+      interval: 5s
+
+  # Database
+  mongo-db:
+    image: mongo:${MONGO_DB_VERSION}
+    hostname: mongo-db
+    container_name: db-mongo
+    expose:
+      - "${MONGO_DB_PORT}"
+    ports:
+      - "${MONGO_DB_PORT}:${MONGO_DB_PORT}" # localhost:27017
+    networks:
+      - main-net
+    volumes:
+      - mongo-db:/data
+    healthcheck:
+      test: |
+        host=`hostname --ip-address || echo '127.0.0.1'`;
+        mongo --quiet $host/test --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)' && echo 0 || echo 1
+      interval: 5s
+
+
+  # Other services
+  grafana:
+    image: grafana/grafana:6.1.6
+    container_name: grafana
+    networks:
+      - main-net
+    ports:
+      - "8080:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=https://github.com/orchestracities/grafana-map-plugin/archive/master.zip;grafana-map-plugin,grafana-clock-panel,grafana-worldmap-panel
+    volumes:
+      - grafana:/var/lib/grafana
+
+
+# Network
+networks:
+  main-net:
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+
+volumes:
+  mongo-db: ~
+  grafana: ~
